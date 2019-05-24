@@ -133,7 +133,7 @@ class ProposalTargetProp(mx.operator.CustomOpProp):
         return ['rois', 'gt_boxes']
 
     def list_outputs(self):
-        return ['rois_output', 'label_5', 'bbox_target_5', 'bbox_weight_5']
+        return ['rois_output', 'label', 'bbox_target', 'bbox_weight']
 
     def infer_shape(self, in_shape):
         assert self._batch_rois % self._batch_images == 0, \
