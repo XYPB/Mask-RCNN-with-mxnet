@@ -3,8 +3,8 @@ import numpy as np
 
 
 def get_names():
-    pred = ['rpn_cls_prob_5', 'rpn_bbox_loss', 'rcnn_cls_prob', 'rcnn_bbox_loss', 'rcnn_label']
-    label = ['rpn_label', 'rpn_bbox_target', 'rpn_bbox_weight']
+    pred = ['rpn_cls_prob_5', 'rpn_bbox_loss_5', 'rcnn_cls_prob', 'rcnn_bbox_loss', 'rcnn_label']
+    label = ['rpn_label_5', 'rpn_bbox_target_5', 'rpn_bbox_weight_5']
     return pred, label
 
 
@@ -15,7 +15,7 @@ class RPNAccMetric(mx.metric.EvalMetric):
 
     def update(self, labels, preds):
         pred = preds[self.pred.index('rpn_cls_prob_5')]
-        label = labels[self.label.index('rpn_label')]
+        label = labels[self.label.index('rpn_label_5')]
 
         # pred (b, c, p) or (b, c, h, w)
         pred_label = mx.ndarray.argmax_channel(pred).asnumpy().astype('int32')
@@ -56,7 +56,7 @@ class RPNLogLossMetric(mx.metric.EvalMetric):
 
     def update(self, labels, preds):
         pred = preds[self.pred.index('rpn_cls_prob_5')]
-        label = labels[self.label.index('rpn_label')]
+        label = labels[self.label.index('rpn_label_5')]
 
         # label (b, p)
         label = label.asnumpy().astype('int32').reshape((-1))
@@ -103,8 +103,8 @@ class RPNL1LossMetric(mx.metric.EvalMetric):
         self.pred, self.label = get_names()
 
     def update(self, labels, preds):
-        bbox_loss = preds[self.pred.index('rpn_bbox_loss')].asnumpy()
-        bbox_weight = labels[self.label.index('rpn_bbox_weight')].asnumpy()
+        bbox_loss = preds[self.pred.index('rpn_bbox_loss_5')].asnumpy()
+        bbox_weight = labels[self.label.index('rpn_bbox_weight_5')].asnumpy()
 
         # calculate num_inst (average on those fg anchors)
         num_inst = np.sum(bbox_weight > 0) / 4
