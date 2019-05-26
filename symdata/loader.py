@@ -112,7 +112,7 @@ class TestLoader(mx.io.DataIter):
 
 class AnchorLoader(mx.io.DataIter):
     def __init__(self, roidb, batch_size, short, max_size, mean, std,
-                 feat_sym, anchor_generator_5, anchor_generator_4, anchor_sampler,
+                 feat_sym_5, feat_sym_4, anchor_generator_5, anchor_generator_4, anchor_sampler,
                  shuffle=False):
         super(AnchorLoader, self).__init__()
 
@@ -123,7 +123,8 @@ class AnchorLoader(mx.io.DataIter):
         self._max_size = max_size
         self._mean = mean
         self._std = std
-        self._feat_sym = feat_sym
+        self._feat_sym_5 = feat_sym_5
+        self._feat_sym_4 = feat_sym_4
         self._ag_5 = anchor_generator_5
         self._ag_4 = anchor_generator_4
         self._as = anchor_sampler
@@ -135,7 +136,7 @@ class AnchorLoader(mx.io.DataIter):
 
         # decide data and label names
         self._data_name = ['data', 'im_info', 'gt_boxes']
-        self._label_name = ['label_5', 'bbox_target_5', 'bbox_weight_5']
+        self._label_name = ['label_5', 'bbox_target_5', 'bbox_weight_5', 'label_4', 'bbox_target_4', 'bbox_weight_4']
 
         # status variable
         self._cur = 0
@@ -190,14 +191,14 @@ class AnchorLoader(mx.io.DataIter):
     def getlabel(self):
         im_tensor, im_info, gt_boxes = self._data
 
+        # 5
         # all stacked image share same anchors
-        _, out_shape, _ = self._feat_sym.infer_shape(data=im_tensor.shape)
-        feat_height, feat_width = out_shape[0][-2:]
-        anchors_5 = self._ag_5.generate(feat_height, feat_width)
-        anchors_4 = self._ag_4.generate(feat_height, feat_width)
+        _, out_shape_5, _ = self._feat_sym_5.infer_shape(data=im_tensor.shape)
+        feat_height_5, feat_width_5 = out_shape_5[0][-2:]
+        anchors_5 = self._ag_5.generate(feat_height_5, feat_width_5)
 
-        # assign anchor according to their real size encoded in im_info
         label, bbox_target, bbox_weight = [], [], []
+        # assign anchor according to their real size encoded in im_info
         for batch_ind in range(im_info.shape[0]):
             b_im_info = im_info[batch_ind].asnumpy()
             b_gt_boxes = gt_boxes[batch_ind].asnumpy()
@@ -205,18 +206,46 @@ class AnchorLoader(mx.io.DataIter):
 
             b_label, b_bbox_target, b_bbox_weight = self._as.assign(anchors_5, b_gt_boxes, b_im_height, b_im_width)
 
-            b_label = b_label.reshape((feat_height, feat_width, -1)).transpose((2, 0, 1)).flatten()
-            b_bbox_target = b_bbox_target.reshape((feat_height, feat_width, -1)).transpose((2, 0, 1))
-            b_bbox_weight = b_bbox_weight.reshape((feat_height, feat_width, -1)).transpose((2, 0, 1))
+            b_label = b_label.reshape((feat_height_5, feat_width_5, -1)).transpose((2, 0, 1)).flatten()
+            b_bbox_target = b_bbox_target.reshape((feat_height_5, feat_width_5, -1)).transpose((2, 0, 1))
+            b_bbox_weight = b_bbox_weight.reshape((feat_height_5, feat_width_5, -1)).transpose((2, 0, 1))
 
             label.append(b_label)
             bbox_target.append(b_bbox_target)
             bbox_weight.append(b_bbox_weight)
 
-        label = mx.nd.array(tensor_vstack(label, pad=-1))
-        bbox_target = mx.nd.array(tensor_vstack(bbox_target, pad=0))
-        bbox_weight = mx.nd.array(tensor_vstack(bbox_weight, pad=0))
-        self._label = label, bbox_target, bbox_weight
+        label_5 = mx.nd.array(tensor_vstack(label, pad=-1))
+        bbox_target_5 = mx.nd.array(tensor_vstack(bbox_target, pad=0))
+        bbox_weight_5 = mx.nd.array(tensor_vstack(bbox_weight, pad=0))
+
+        # 4
+        # all stacked image share same anchors
+        _, out_shape_4, _ = self._feat_sym_4.infer_shape(data=im_tensor.shape)
+        feat_height_4, feat_width_4 = out_shape_4[0][-2:]
+        anchors_4 = self._ag_4.generate(feat_height_4, feat_width_4)
+
+        label, bbox_target, bbox_weight = [], [], []
+        # assign anchor according to their real size encoded in im_info
+        for batch_ind in range(im_info.shape[0]):
+            b_im_info = im_info[batch_ind].asnumpy()
+            b_gt_boxes = gt_boxes[batch_ind].asnumpy()
+            b_im_height, b_im_width = b_im_info[:2]
+
+            b_label, b_bbox_target, b_bbox_weight = self._as.assign(anchors_4, b_gt_boxes, b_im_height, b_im_width)
+
+            b_label = b_label.reshape((feat_height_4, feat_width_4, -1)).transpose((2, 0, 1)).flatten()
+            b_bbox_target = b_bbox_target.reshape((feat_height_4, feat_width_4, -1)).transpose((2, 0, 1))
+            b_bbox_weight = b_bbox_weight.reshape((feat_height_4, feat_width_4, -1)).transpose((2, 0, 1))
+
+            label.append(b_label)
+            bbox_target.append(b_bbox_target)
+            bbox_weight.append(b_bbox_weight)
+
+        label_4 = mx.nd.array(tensor_vstack(label, pad=-1))
+        bbox_target_4 = mx.nd.array(tensor_vstack(bbox_target, pad=0))
+        bbox_weight_4 = mx.nd.array(tensor_vstack(bbox_weight, pad=0))
+
+        self._label = label_5, bbox_target_5, bbox_weight_5, label_4, bbox_target_4, bbox_weight_4
         return self._label
 
     def getindex(self):

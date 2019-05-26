@@ -9,7 +9,7 @@ from mxnet.module import Module
 from symdata.loader import AnchorGenerator, AnchorSampler, AnchorLoader
 from model.logger import logger
 from model.model import load_param, infer_data_shape, check_shape, initialize_frcnn, get_fixed_params
-from model.metric import RPNAccMetric, RPNLogLossMetric, RPNL1LossMetric, RCNNAccMetric, RCNNLogLossMetric, RCNNL1LossMetric
+from model.metric import *
 
 os.environ['MXNET_CUDNN_AUTOTUNE_DEFAULT'] = "0"
 
@@ -23,26 +23,26 @@ def train_net(sym, roidb, args):
 
     # load training data
     feat_sym_5 = sym.get_internals()['fpn_cls_score_5_output']
-    # feat_sym_4 = sym.get_internals()['fpn_cls_score_4_output']
-    ag_5 = AnchorGenerator(feat_stride=args.rpn_feat_stride,
+    feat_sym_4 = sym.get_internals()['fpn_cls_score_4_output']
+    ag_5 = AnchorGenerator(feat_stride=16,
                          anchor_scales=args.rpn_anchor_scales, anchor_ratios=args.rpn_anchor_ratios)
-    ag_4 = AnchorGenerator(feat_stride=args.rpn_feat_stride,
+    ag_4 = AnchorGenerator(feat_stride=8,
                          anchor_scales=args.rpn_anchor_scales, anchor_ratios=args.rpn_anchor_ratios)
-    asp = AnchorSampler(allowed_border=args.rpn_allowed_border, batch_rois=args.rpn_batch_rois,
+    asp = AnchorSampler(allowed_border=args.rpn_allowed_border, batch_rois=args.rpn_batch_rois//2,
                         fg_fraction=args.rpn_fg_fraction, fg_overlap=args.rpn_fg_overlap,
                         bg_overlap=args.rpn_bg_overlap)
     train_data = AnchorLoader(roidb, batch_size, args.img_short_side, args.img_long_side,
-                              args.img_pixel_means, args.img_pixel_stds, feat_sym_5, ag_5, ag_4, asp, shuffle=True)
+                              args.img_pixel_means, args.img_pixel_stds, feat_sym_5, feat_sym_4, ag_5, ag_4, asp, shuffle=True)
     logger.info("{}/{}".format(len(roidb), batch_size))
 
     # produce shape max possible
     _, out_shape_5, _ = feat_sym_5.infer_shape(data=(1, 3, args.img_long_side, args.img_long_side))
-    # _, out_shape_4, _ = feat_sym_4.infer_shape(data=(1, 3, args.img_long_side, args.img_long_side))
+    _, out_shape_4, _ = feat_sym_4.infer_shape(data=(1, 3, args.img_long_side, args.img_long_side))
     feat_height_5, feat_width_5 = out_shape_5[0][-2:]
-    # feat_height_4, feat_width_4 = out_shape_4[0][-2:]
+    feat_height_4, feat_width_4 = out_shape_4[0][-2:]
     rpn_num_anchors = len(args.rpn_anchor_ratios)
     data_names = ['data', 'im_info', 'gt_boxes']
-    label_names = ['label_5', 'bbox_target_5', 'bbox_weight_5']
+    label_names = ['label_5', 'bbox_target_5', 'bbox_weight_5', 'label_4', 'bbox_target_4', 'bbox_weight_4']
     data_shapes = [('data', (batch_size, 3, args.img_long_side, args.img_long_side)),
                    ('im_info', (batch_size, 3)),
                    ('gt_boxes', (batch_size, 100, 5))]
@@ -50,6 +50,9 @@ def train_net(sym, roidb, args):
         ('label_5', (batch_size, 1, rpn_num_anchors * feat_height_5, feat_width_5)),
         ('bbox_target_5', (batch_size, 4 * rpn_num_anchors, feat_height_5, feat_width_5)),
         ('bbox_weight_5', (batch_size, 4 * rpn_num_anchors, feat_height_5, feat_width_5)),
+        ('label_4', (batch_size, 1, rpn_num_anchors * feat_height_4, feat_width_4)),
+        ('bbox_target_4', (batch_size, 4 * rpn_num_anchors, feat_height_4, feat_width_4)),
+        ('bbox_weight_4', (batch_size, 4 * rpn_num_anchors, feat_height_4, feat_width_4)),
     ]
 
     # print shapes
@@ -72,14 +75,17 @@ def train_net(sym, roidb, args):
     logger.info('locking params\n%s' % pprint.pformat(fixed_param_names))
 
     # metric
-    rpn_eval_metric = RPNAccMetric()
-    rpn_cls_metric = RPNLogLossMetric()
-    rpn_bbox_metric = RPNL1LossMetric()
+    rpn_eval_metric_5 = RPNAccMetric_5()
+    rpn_cls_metric_5 = RPNLogLossMetric_5()
+    rpn_bbox_metric_5 = RPNL1LossMetric_5()
+    rpn_eval_metric_4 = RPNAccMetric_4()
+    rpn_cls_metric_4 = RPNLogLossMetric_4()
+    rpn_bbox_metric_4 = RPNL1LossMetric_4()
     eval_metric = RCNNAccMetric()
     cls_metric = RCNNLogLossMetric()
     bbox_metric = RCNNL1LossMetric()
     eval_metrics = mx.metric.CompositeEvalMetric()
-    for child_metric in [rpn_eval_metric, rpn_cls_metric, rpn_bbox_metric, eval_metric, cls_metric, bbox_metric]:
+    for child_metric in [rpn_eval_metric_5, rpn_cls_metric_5, rpn_bbox_metric_5, rpn_eval_metric_4, rpn_cls_metric_4, rpn_bbox_metric_4, eval_metric, cls_metric, bbox_metric]:
         eval_metrics.add(child_metric)
 
     # callback
@@ -257,7 +263,7 @@ def get_dataset(dataset, args):
 def get_network(network, args):
     networks = {
         'resnet50': get_resnet50_train,
-        'resnet101': get_resnet101_train
+        # 'resnet101': get_resnet101_train
     }
     if network not in networks:
         raise ValueError("network {} not supported".format(network))
