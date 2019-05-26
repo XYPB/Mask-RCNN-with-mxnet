@@ -25,9 +25,9 @@ def train_net(sym, roidb, args):
     feat_sym_5 = sym.get_internals()['fpn_cls_score_5_output']
     feat_sym_4 = sym.get_internals()['fpn_cls_score_4_output']
     ag_5 = AnchorGenerator(feat_stride=16,
-                         anchor_scales=args.rpn_anchor_scales, anchor_ratios=args.rpn_anchor_ratios)
+                         anchor_scales=32, anchor_ratios=args.rpn_anchor_ratios)
     ag_4 = AnchorGenerator(feat_stride=8,
-                         anchor_scales=args.rpn_anchor_scales, anchor_ratios=args.rpn_anchor_ratios)
+                         anchor_scales=16, anchor_ratios=args.rpn_anchor_ratios)
     asp = AnchorSampler(allowed_border=args.rpn_allowed_border, batch_rois=args.rpn_batch_rois//2,
                         fg_fraction=args.rpn_fg_fraction, fg_overlap=args.rpn_fg_overlap,
                         bg_overlap=args.rpn_bg_overlap)
