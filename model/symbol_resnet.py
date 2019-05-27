@@ -76,10 +76,13 @@ def get_resnet_train(anchor_scales, anchor_ratios, rpn_feature_stride,
     gt_boxes = mx.symbol.Variable(name="gt_boxes")
     rpn_label_5 = mx.symbol.Variable(name='label_5')
     rpn_label_4 = mx.symbol.Variable(name='label_4')
+    rpn_label_3 = mx.symbol.Variable(name='label_3')
     rpn_bbox_target_5 = mx.symbol.Variable(name='bbox_target_5')
     rpn_bbox_weight_5 = mx.symbol.Variable(name='bbox_weight_5')
     rpn_bbox_target_4 = mx.symbol.Variable(name='bbox_target_4')
     rpn_bbox_weight_4 = mx.symbol.Variable(name='bbox_weight_4')
+    rpn_bbox_target_3 = mx.symbol.Variable(name='bbox_target_3')
+    rpn_bbox_weight_3 = mx.symbol.Variable(name='bbox_weight_3')
 
     # shared convolutional layers
     conv_feat_5, conv_feat_4, conv_feat_3, conv_feat_2 = get_resnet_feature(data, units=units, filter_list=filter_list)
@@ -170,16 +173,36 @@ def get_resnet_train(anchor_scales, anchor_ratios, rpn_feature_stride,
         rpn_pre_nms_top_n=rpn_pre_topk, rpn_post_nms_top_n=rpn_post_topk,
         threshold=rpn_nms_thresh, rpn_min_size=rpn_min_size)
 
-    rois = mx.symbol.Concat(rois_5, rois_4, dim=0)
-    # rois = rois_5
+    fpn_conv_3 = mx.symbol.Convolution(
+        data=P3, kernel=(3, 3), pad=(1, 1), num_filter=512, name="fpn_conv_3x3_3")
+    fpn_relu_3 = mx.symbol.Activation(data=fpn_conv_3, act_type="relu", name="fpn_relu_3")
+    fpn_cls_score_3 = mx.symbol.Convolution(
+        data=fpn_relu_3, kernel=(1, 1), pad=(0, 0), num_filter=2 * len(anchor_ratios), name="fpn_cls_score_3")
+    fpn_bbox_pred_3 = mx.symbol.Convolution(
+        data=fpn_relu_3, kernel=(1, 1), pad=(0, 0), num_filter=4 * len(anchor_ratios), name="fpn_bbox_pred_3")
+        
+    rpn_cls_score_reshape_3 = mx.symbol.Reshape(
+        data=fpn_cls_score_3, shape=(0, 2, -1, 0), name="rpn_cls_score_reshape_3")
+    rpn_cls_prob_3 = mx.symbol.SoftmaxOutput(data=rpn_cls_score_reshape_3, label=rpn_label_3, multi_output=True,
+                                           normalization='valid', use_ignore=True, ignore_label=-1, name="rpn_cls_prob_3")
+    rpn_cls_act_3 = mx.symbol.softmax(
+        data=rpn_cls_score_reshape_3, axis=1, name="rpn_cls_act_3")
+    rpn_cls_act_reshape_3 = mx.symbol.Reshape(
+        data=rpn_cls_act_3, shape=(0, 2 * num_anchors, -1, 0), name='rpn_cls_act_reshape_3')
 
-    # fpn_conv_3 = mx.symbol.Convolution(
-    #     data=P3, kernel=(3, 3), pad=(1, 1), num_filter=512, name="fpn_conv_3x3_3")
-    # fpn_relu_3 = mx.symbol.Activation(data=fpn_conv_3, act_type="relu", name="fpn_relu_3")
-    # fpn_cls_score_3 = mx.symbol.Convolution(
-    #     data=fpn_relu_3, kernel=(1, 1), pad=(0, 0), num_filter=2 * len(anchor_ratios), name="fpn_cls_score_3")
-    # fpn_bbox_pred_3 = mx.symbol.Convolution(
-    #     data=fpn_relu_3, kernel=(1, 1), pad=(0, 0), num_filter=4 * len(anchor_ratios), name="fpn_bbox_pred_3")
+    # rpn bbox regression
+    # rpn_bbox_pred = mx.symbol.Concat(fpn_bbox_pred_3, fpn_bbox_pred_3, fpn_bbox_pred_3, name="rpn_bbox_pred")
+    rpn_bbox_loss_3_ = rpn_bbox_weight_3 * mx.symbol.smooth_l1(name='rpn_bbox_loss_3_', scalar=3.0, data=(fpn_bbox_pred_3 - rpn_bbox_target_3))
+    rpn_bbox_loss_3 = mx.sym.MakeLoss(name='rpn_bbox_loss_3', data=rpn_bbox_loss_3_, grad_scale=1.0 / rpn_batch_rois)
+
+    # rpn proposal
+    rois_3 = mx.symbol.contrib.MultiProposal(
+        cls_prob=rpn_cls_act_reshape_3, bbox_pred=fpn_bbox_pred_3, im_info=im_info, name='rois_3',
+        feature_stride=4, scales=8, ratios=anchor_ratios,
+        rpn_pre_nms_top_n=rpn_pre_topk, rpn_post_nms_top_n=rpn_post_topk,
+        threshold=rpn_nms_thresh, rpn_min_size=rpn_min_size)
+
+    rois = mx.symbol.Concat(rois_5, rois_4, rois_3, dim=0)
 
     # rcnn roi proposal target
     group = mx.symbol.Custom(rois=rois, gt_boxes=gt_boxes, op_type='proposal_target',
@@ -213,7 +236,7 @@ def get_resnet_train(anchor_scales, anchor_ratios, rpn_feature_stride,
     bbox_loss = mx.symbol.Reshape(data=bbox_loss, shape=(rcnn_batch_size, -1, 4 * num_classes), name='bbox_loss_reshape')
 
     # group output
-    group = mx.symbol.Group([rpn_cls_prob_5, rpn_bbox_loss_5, rpn_cls_prob_4, rpn_bbox_loss_4, cls_prob, bbox_loss, mx.symbol.BlockGrad(label)])
+    group = mx.symbol.Group([rpn_cls_prob_5, rpn_bbox_loss_5, rpn_cls_prob_4, rpn_bbox_loss_4, rpn_cls_prob_3, rpn_bbox_loss_3, cls_prob, bbox_loss, mx.symbol.BlockGrad(label)])
     return group
 
 
@@ -305,7 +328,29 @@ def get_resnet_test(anchor_scales, anchor_ratios, rpn_feature_stride,
         rpn_pre_nms_top_n=rpn_pre_topk, rpn_post_nms_top_n=rpn_post_topk,
         threshold=rpn_nms_thresh, rpn_min_size=rpn_min_size)
 
-    rois = mx.symbol.Concat(rois_5, rois_4, dim=0)
+    fpn_conv_3 = mx.symbol.Convolution(
+        data=P4, kernel=(3, 3), pad=(1, 1), num_filter=512, name="fpn_conv_3x3_3")
+    fpn_relu_3 = mx.symbol.Activation(data=fpn_conv_3, act_type="relu", name="fpn_relu_3")
+    fpn_cls_score_3 = mx.symbol.Convolution(
+        data=fpn_relu_3, kernel=(1, 1), pad=(0, 0), num_filter=2 * len(anchor_ratios), name="fpn_cls_score_3")
+    fpn_bbox_pred_3 = mx.symbol.Convolution(
+        data=fpn_relu_3, kernel=(1, 1), pad=(0, 0), num_filter=4 * len(anchor_ratios), name="fpn_bbox_pred_3")
+        
+    rpn_cls_score_reshape_3 = mx.symbol.Reshape(
+        data=fpn_cls_score_3, shape=(0, 2, -1, 0), name="rpn_cls_score_reshape_3")
+    rpn_cls_act_3 = mx.symbol.softmax(
+        data=rpn_cls_score_reshape_3, axis=1, name="rpn_cls_act_3")
+    rpn_cls_act_reshape_3 = mx.symbol.Reshape(
+        data=rpn_cls_act_3, shape=(0, 2 * num_anchors, -1, 0), name='rpn_cls_act_reshape_3')
+
+    # rpn proposal
+    rois_3 = mx.symbol.contrib.MultiProposal(
+        cls_prob=rpn_cls_act_reshape_3, bbox_pred=fpn_bbox_pred_3, im_info=im_info, name='rois_3',
+        feature_stride=4, scales=8, ratios=anchor_ratios,
+        rpn_pre_nms_top_n=rpn_pre_topk, rpn_post_nms_top_n=rpn_post_topk,
+        threshold=rpn_nms_thresh, rpn_min_size=rpn_min_size)
+
+    rois = mx.symbol.Concat(rois_5, rois_4, rois_3, dim=0)
 
     # rcnn roi pool
     roi_pool = mx.symbol.ROIPooling(

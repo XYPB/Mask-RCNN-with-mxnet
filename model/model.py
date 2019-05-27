@@ -35,7 +35,7 @@ def check_shape(symbol, data_shapes, arg_params, aux_params):
     arg_shape_dict, aux_shape_dict = infer_param_shape(symbol, data_shapes)
     data_shape_dict, out_shape_dict = infer_data_shape(symbol, data_shapes)
     for k in symbol.list_arguments():
-        if k in data_shape_dict or 'label_5' in k or 'label_4' in k:
+        if k in data_shape_dict or 'label_5' in k or 'label_4' in k or 'label_3' in k:
             continue
         assert k in arg_params, '%s not initialized' % k
         assert arg_params[k].shape == arg_shape_dict[k], \
@@ -48,17 +48,17 @@ def check_shape(symbol, data_shapes, arg_params, aux_params):
 
 def initialize_frcnn(symbol, data_shapes, arg_params, aux_params):
     arg_shape_dict, aux_shape_dict = infer_param_shape(symbol, data_shapes)
-    for P in range(4, 6):
+    for P in range(3, 6):
         arg_params['fpn_conv_3x3_{}_weight'.format(P)] = mx.random.normal(0, 0.01, shape=arg_shape_dict['fpn_conv_3x3_{}_weight'.format(P)])
         arg_params['fpn_conv_3x3_{}_bias'.format(P)] = mx.nd.zeros(shape=arg_shape_dict['fpn_conv_3x3_{}_bias'.format(P)])
         arg_params['fpn_cls_score_{}_weight'.format(P)] = mx.random.normal(0, 0.01, shape=arg_shape_dict['fpn_cls_score_{}_weight'.format(P)])
         arg_params['fpn_cls_score_{}_bias'.format(P)] = mx.nd.zeros(shape=arg_shape_dict['fpn_cls_score_{}_bias'.format(P)])
         arg_params['fpn_bbox_pred_{}_weight'.format(P)] = mx.random.normal(0, 0.01, shape=arg_shape_dict['fpn_bbox_pred_{}_weight'.format(P)])
         arg_params['fpn_bbox_pred_{}_bias'.format(P)] = mx.nd.zeros(shape=arg_shape_dict['fpn_bbox_pred_{}_bias'.format(P)])
-    for P in range(4, 6):
+    for P in range(3, 6):
         arg_params['P{}_lateral_weight'.format(P)] = mx.random.normal(0, 0.01, shape=arg_shape_dict['P{}_lateral_weight'.format(P)])
         arg_params['P{}_lateral_bias'.format(P)] = mx.nd.zeros(shape=arg_shape_dict['P{}_lateral_bias'.format(P)])
-    for P in range(4, 5):
+    for P in range(3, 5):
         arg_params['P{}_aggregate_weight'.format(P)] = mx.random.normal(0, 0.01, shape=arg_shape_dict['P{}_aggregate_weight'.format(P)])
         arg_params['P{}_aggregate_bias'.format(P)] = mx.nd.zeros(shape=arg_shape_dict['P{}_aggregate_bias'.format(P)])
 

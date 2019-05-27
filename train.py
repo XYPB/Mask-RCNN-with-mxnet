@@ -24,25 +24,30 @@ def train_net(sym, roidb, args):
     # load training data
     feat_sym_5 = sym.get_internals()['fpn_cls_score_5_output']
     feat_sym_4 = sym.get_internals()['fpn_cls_score_4_output']
+    feat_sym_3 = sym.get_internals()['fpn_cls_score_3_output']
     ag_5 = AnchorGenerator(feat_stride=16,
                          anchor_scales=(32,), anchor_ratios=args.rpn_anchor_ratios)
     ag_4 = AnchorGenerator(feat_stride=8,
                          anchor_scales=(16,), anchor_ratios=args.rpn_anchor_ratios)
+    ag_3 = AnchorGenerator(feat_stride=4,
+                         anchor_scales=(8,), anchor_ratios=args.rpn_anchor_ratios)
     asp = AnchorSampler(allowed_border=args.rpn_allowed_border, batch_rois=args.rpn_batch_rois//2,
                         fg_fraction=args.rpn_fg_fraction, fg_overlap=args.rpn_fg_overlap,
                         bg_overlap=args.rpn_bg_overlap)
     train_data = AnchorLoader(roidb, batch_size, args.img_short_side, args.img_long_side,
-                              args.img_pixel_means, args.img_pixel_stds, feat_sym_5, feat_sym_4, ag_5, ag_4, asp, shuffle=True)
+                              args.img_pixel_means, args.img_pixel_stds, feat_sym_5, feat_sym_4, feat_sym_3, ag_5, ag_4, ag_3, asp, shuffle=True)
     logger.info("{}/{}".format(len(roidb), batch_size))
 
     # produce shape max possible
     _, out_shape_5, _ = feat_sym_5.infer_shape(data=(1, 3, args.img_long_side, args.img_long_side))
     _, out_shape_4, _ = feat_sym_4.infer_shape(data=(1, 3, args.img_long_side, args.img_long_side))
+    _, out_shape_3, _ = feat_sym_3.infer_shape(data=(1, 3, args.img_long_side, args.img_long_side))
     feat_height_5, feat_width_5 = out_shape_5[0][-2:]
     feat_height_4, feat_width_4 = out_shape_4[0][-2:]
+    feat_height_3, feat_width_3 = out_shape_3[0][-2:]
     rpn_num_anchors = len(args.rpn_anchor_ratios)
     data_names = ['data', 'im_info', 'gt_boxes']
-    label_names = ['label_5', 'bbox_target_5', 'bbox_weight_5', 'label_4', 'bbox_target_4', 'bbox_weight_4']
+    label_names = ['label_5', 'bbox_target_5', 'bbox_weight_5', 'label_4', 'bbox_target_4', 'bbox_weight_4', 'label_3', 'bbox_target_3', 'bbox_weight_3']
     data_shapes = [('data', (batch_size, 3, args.img_long_side, args.img_long_side)),
                    ('im_info', (batch_size, 3)),
                    ('gt_boxes', (batch_size, 100, 5))]
@@ -53,6 +58,9 @@ def train_net(sym, roidb, args):
         ('label_4', (batch_size, 1, rpn_num_anchors * feat_height_4, feat_width_4)),
         ('bbox_target_4', (batch_size, 4 * rpn_num_anchors, feat_height_4, feat_width_4)),
         ('bbox_weight_4', (batch_size, 4 * rpn_num_anchors, feat_height_4, feat_width_4)),
+        ('label_3', (batch_size, 1, rpn_num_anchors * feat_height_3, feat_width_3)),
+        ('bbox_target_3', (batch_size, 4 * rpn_num_anchors, feat_height_3, feat_width_3)),
+        ('bbox_weight_3', (batch_size, 4 * rpn_num_anchors, feat_height_3, feat_width_3)),
     ]
 
     # print shapes
@@ -81,11 +89,27 @@ def train_net(sym, roidb, args):
     rpn_eval_metric_4 = RPNAccMetric_4()
     rpn_cls_metric_4 = RPNLogLossMetric_4()
     rpn_bbox_metric_4 = RPNL1LossMetric_4()
+    rpn_eval_metric_3 = RPNAccMetric_3()
+    rpn_cls_metric_3 = RPNLogLossMetric_3()
+    rpn_bbox_metric_3 = RPNL1LossMetric_3()
     eval_metric = RCNNAccMetric()
     cls_metric = RCNNLogLossMetric()
     bbox_metric = RCNNL1LossMetric()
     eval_metrics = mx.metric.CompositeEvalMetric()
-    for child_metric in [rpn_eval_metric_5, rpn_cls_metric_5, rpn_bbox_metric_5, rpn_eval_metric_4, rpn_cls_metric_4, rpn_bbox_metric_4, eval_metric, cls_metric, bbox_metric]:
+    for child_metric in [
+        rpn_eval_metric_5,
+        rpn_cls_metric_5,
+        rpn_bbox_metric_5,
+        rpn_eval_metric_4,
+        rpn_cls_metric_4,
+        rpn_bbox_metric_4,
+        rpn_eval_metric_3,
+        rpn_cls_metric_3,
+        rpn_bbox_metric_3,
+        eval_metric,
+        cls_metric,
+        bbox_metric,
+        ]:
         eval_metrics.add(child_metric)
 
     # callback
