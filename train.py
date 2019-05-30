@@ -31,7 +31,7 @@ def train_net(sym, roidb, args):
                          anchor_scales=(16,), anchor_ratios=args.rpn_anchor_ratios)
     ag_3 = AnchorGenerator(feat_stride=4,
                          anchor_scales=(8,), anchor_ratios=args.rpn_anchor_ratios)
-    asp = AnchorSampler(allowed_border=args.rpn_allowed_border, batch_rois=args.rpn_batch_rois//2,
+    asp = AnchorSampler(allowed_border=args.rpn_allowed_border, batch_rois=args.rpn_batch_rois//3,
                         fg_fraction=args.rpn_fg_fraction, fg_overlap=args.rpn_fg_overlap,
                         bg_overlap=args.rpn_bg_overlap)
     train_data = AnchorLoader(roidb, batch_size, args.img_short_side, args.img_long_side,
