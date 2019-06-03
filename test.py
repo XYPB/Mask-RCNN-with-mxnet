@@ -95,7 +95,7 @@ def parse_args():
     parser.add_argument('--rpn-min-size', type=int, default=16)
     parser.add_argument('--rcnn-num-classes', type=int, default=21)
     parser.add_argument('--rcnn-feat-stride', type=int, default=16)
-    parser.add_argument('--rcnn-pooled-size', type=str, default='(14, 14)')
+    parser.add_argument('--rcnn-pooled-size', type=str, default='(7, 7)')
     parser.add_argument('--rcnn-batch-size', type=int, default=1)
     parser.add_argument('--rcnn-bbox-stds', type=str, default='(0.1, 0.1, 0.2, 0.2)')
     parser.add_argument('--rcnn-nms-thresh', type=float, default=0.3)
@@ -134,7 +134,7 @@ def get_resnet50_test(args):
     args.img_pixel_stds = (1.0, 1.0, 1.0)
     args.rpn_feat_stride = 16
     args.rcnn_feat_stride = 16
-    args.rcnn_pooled_size = (14, 14)
+    args.rcnn_pooled_size = (7, 7)
     return get_resnet_test(anchor_scales=args.rpn_anchor_scales, anchor_ratios=args.rpn_anchor_ratios,
                            rpn_feature_stride=args.rpn_feat_stride, rpn_pre_topk=args.rpn_pre_nms_topk,
                            rpn_post_topk=args.rpn_post_nms_topk, rpn_nms_thresh=args.rpn_nms_thresh,

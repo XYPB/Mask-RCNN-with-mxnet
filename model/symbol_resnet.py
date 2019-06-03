@@ -51,17 +51,22 @@ def get_resnet_feature(data, units, filter_list):
     unit_res4 = residual_unit(data=unit_res3, num_filter=filter_list[2], stride=(2, 2), dim_match=False, name='stage3_unit1')
     for i in range(2, units[2] + 1):
         unit_res4 = residual_unit(data=unit_res4, num_filter=filter_list[2], stride=(1, 1), dim_match=True, name='stage3_unit%s' % i)
-    return unit_res4, unit_res3, unit_res2, pool0
+        
+    unit_res5 = residual_unit(data=unit_res4, num_filter=filter_list[3], stride=(2, 2), dim_match=False, name='stage4_unit1')
+    for i in range(2, units[3] + 1):
+        unit_res5 = residual_unit(data=unit_res5, num_filter=filter_list[3], stride=(1, 1), dim_match=True, name='stage4_unit%s' % i)
+    
+    return unit_res5, unit_res4, unit_res3, unit_res2
 
 
 def get_resnet_top_feature(data, units, filter_list):
-    unit = residual_unit(data=data, num_filter=filter_list[3], stride=(2, 2), dim_match=False, name='stage4_unit1')
-    for i in range(2, units[3] + 1):
-        unit = residual_unit(data=unit, num_filter=filter_list[3], stride=(1, 1), dim_match=True, name='stage4_unit%s' % i)
-    bn1 = mx.sym.BatchNorm(data=unit, fix_gamma=False, eps=eps, use_global_stats=use_global_stats, name='bn1')
-    relu1 = mx.sym.Activation(data=bn1, act_type='relu', name='relu1')
-    pool1 = mx.symbol.Pooling(data=relu1, global_pool=True, kernel=(7, 7), pool_type='avg', name='pool1')
-    return pool1
+    flatten = mx.symbol.Flatten(data=data, name="flatten")
+    fc6     = mx.symbol.FullyConnected(data=flatten, num_hidden=1024, name='fc6')
+    relu6   = mx.symbol.Activation(data=fc6, act_type="relu", name="relu6")
+    drop6   = mx.symbol.Dropout(data=relu6, p=0.5, name="drop6")
+    fc7     = mx.symbol.FullyConnected(data=drop6, num_hidden=1024, name='fc7')
+    relu7   = mx.symbol.Activation(data=fc7, act_type="relu", name="relu7")
+    return relu7
 
 
 def get_resnet_train(anchor_scales, anchor_ratios, rpn_feature_stride,
@@ -116,7 +121,7 @@ def get_resnet_train(anchor_scales, anchor_ratios, rpn_feature_stride,
     P6 = mx.symbol.Pooling(data=P5, kernel=(3, 3), stride=(2, 2), pad=(1, 1), pool_type='max', name='P6_subsampling')
 
     fpn_conv_5 = mx.symbol.Convolution(
-        data=P5, kernel=(3, 3), pad=(1, 1), num_filter=512, name="fpn_conv_3x3_5")
+        data=P4, kernel=(3, 3), pad=(1, 1), num_filter=512, name="fpn_conv_3x3_5")
     fpn_relu_5 = mx.symbol.Activation(data=fpn_conv_5, act_type="relu", name="fpn_relu_5")
     fpn_cls_score_5 = mx.symbol.Convolution(
         data=fpn_relu_5, kernel=(1, 1), pad=(0, 0), num_filter=2 * len(anchor_ratios), name="fpn_cls_score_5")
@@ -145,7 +150,7 @@ def get_resnet_train(anchor_scales, anchor_ratios, rpn_feature_stride,
         threshold=rpn_nms_thresh, rpn_min_size=rpn_min_size)
 
     fpn_conv_4 = mx.symbol.Convolution(
-        data=P4, kernel=(3, 3), pad=(1, 1), num_filter=512, name="fpn_conv_3x3_4")
+        data=P3, kernel=(3, 3), pad=(1, 1), num_filter=512, name="fpn_conv_3x3_4")
     fpn_relu_4 = mx.symbol.Activation(data=fpn_conv_4, act_type="relu", name="fpn_relu_4")
     fpn_cls_score_4 = mx.symbol.Convolution(
         data=fpn_relu_4, kernel=(1, 1), pad=(0, 0), num_filter=2 * len(anchor_ratios), name="fpn_cls_score_4")
@@ -174,7 +179,7 @@ def get_resnet_train(anchor_scales, anchor_ratios, rpn_feature_stride,
         threshold=rpn_nms_thresh, rpn_min_size=rpn_min_size)
 
     fpn_conv_3 = mx.symbol.Convolution(
-        data=P3, kernel=(3, 3), pad=(1, 1), num_filter=512, name="fpn_conv_3x3_3")
+        data=P2, kernel=(3, 3), pad=(1, 1), num_filter=512, name="fpn_conv_3x3_3")
     fpn_relu_3 = mx.symbol.Activation(data=fpn_conv_3, act_type="relu", name="fpn_relu_3")
     fpn_cls_score_3 = mx.symbol.Convolution(
         data=fpn_relu_3, kernel=(1, 1), pad=(0, 0), num_filter=2 * len(anchor_ratios), name="fpn_cls_score_3")
@@ -215,8 +220,16 @@ def get_resnet_train(anchor_scales, anchor_ratios, rpn_feature_stride,
     bbox_weight = group[3]
 
     # rcnn roi pool
-    roi_pool = mx.symbol.ROIPooling(
-        name='roi_pool', data=conv_feat_5, rois=rois, pooled_size=rcnn_pooled_size, spatial_scale=1.0 / rcnn_feature_stride)
+    roi_pool_3 = mx.symbol.ROIPooling(
+        name='roi_pool', data=P3, rois=rois, pooled_size=rcnn_pooled_size, spatial_scale=1.0 / rcnn_feature_stride)
+        
+    roi_pool_4 = mx.symbol.ROIPooling(
+        name='roi_pool', data=P4, rois=rois, pooled_size=rcnn_pooled_size, spatial_scale=1.0 / rcnn_feature_stride)
+    
+    roi_pool_5 = mx.symbol.ROIPooling(
+        name='roi_pool', data=P5, rois=rois, pooled_size=rcnn_pooled_size, spatial_scale=1.0 / rcnn_feature_stride)
+    
+    roi_pool = mx.symbol.Concat(roi_pool_3, roi_pool_4, roi_pool_5)
 
     # rcnn top feature
     top_feat = get_resnet_top_feature(roi_pool, units=units, filter_list=filter_list)
@@ -285,7 +298,7 @@ def get_resnet_test(anchor_scales, anchor_ratios, rpn_feature_stride,
     P6 = mx.symbol.Pooling(data=P5, kernel=(3, 3), stride=(2, 2), pad=(1, 1), pool_type='max', name='P6_subsampling')
 
     fpn_conv_5 = mx.symbol.Convolution(
-        data=P5, kernel=(3, 3), pad=(1, 1), num_filter=512, name="fpn_conv_3x3_5")
+        data=P4, kernel=(3, 3), pad=(1, 1), num_filter=512, name="fpn_conv_3x3_5")
     fpn_relu_5 = mx.symbol.Activation(data=fpn_conv_5, act_type="relu", name="fpn_relu_5")
     fpn_cls_score_5 = mx.symbol.Convolution(
         data=fpn_relu_5, kernel=(1, 1), pad=(0, 0), num_filter=2 * len(anchor_ratios), name="fpn_cls_score_5")
@@ -307,7 +320,7 @@ def get_resnet_test(anchor_scales, anchor_ratios, rpn_feature_stride,
         threshold=rpn_nms_thresh, rpn_min_size=rpn_min_size)
 
     fpn_conv_4 = mx.symbol.Convolution(
-        data=P4, kernel=(3, 3), pad=(1, 1), num_filter=512, name="fpn_conv_3x3_4")
+        data=P3, kernel=(3, 3), pad=(1, 1), num_filter=512, name="fpn_conv_3x3_4")
     fpn_relu_4 = mx.symbol.Activation(data=fpn_conv_4, act_type="relu", name="fpn_relu_4")
     fpn_cls_score_4 = mx.symbol.Convolution(
         data=fpn_relu_4, kernel=(1, 1), pad=(0, 0), num_filter=2 * len(anchor_ratios), name="fpn_cls_score_4")
@@ -329,7 +342,7 @@ def get_resnet_test(anchor_scales, anchor_ratios, rpn_feature_stride,
         threshold=rpn_nms_thresh, rpn_min_size=rpn_min_size)
 
     fpn_conv_3 = mx.symbol.Convolution(
-        data=P4, kernel=(3, 3), pad=(1, 1), num_filter=512, name="fpn_conv_3x3_3")
+        data=P2, kernel=(3, 3), pad=(1, 1), num_filter=512, name="fpn_conv_3x3_3")
     fpn_relu_3 = mx.symbol.Activation(data=fpn_conv_3, act_type="relu", name="fpn_relu_3")
     fpn_cls_score_3 = mx.symbol.Convolution(
         data=fpn_relu_3, kernel=(1, 1), pad=(0, 0), num_filter=2 * len(anchor_ratios), name="fpn_cls_score_3")
@@ -353,8 +366,16 @@ def get_resnet_test(anchor_scales, anchor_ratios, rpn_feature_stride,
     rois = mx.symbol.Concat(rois_5, rois_4, rois_3, dim=0)
 
     # rcnn roi pool
-    roi_pool = mx.symbol.ROIPooling(
-        name='roi_pool', data=conv_feat_5, rois=rois, pooled_size=rcnn_pooled_size, spatial_scale=1.0 / rcnn_feature_stride)
+    roi_pool_3 = mx.symbol.ROIPooling(
+        name='roi_pool', data=P3, rois=rois, pooled_size=rcnn_pooled_size, spatial_scale=1.0 / rcnn_feature_stride)
+        
+    roi_pool_4 = mx.symbol.ROIPooling(
+        name='roi_pool', data=P4, rois=rois, pooled_size=rcnn_pooled_size, spatial_scale=1.0 / rcnn_feature_stride)
+    
+    roi_pool_5 = mx.symbol.ROIPooling(
+        name='roi_pool', data=P5, rois=rois, pooled_size=rcnn_pooled_size, spatial_scale=1.0 / rcnn_feature_stride)
+    
+    roi_pool = mx.symbol.Concat(roi_pool_3, roi_pool_4, roi_pool_5)
 
     # rcnn top feature
     top_feat = get_resnet_top_feature(roi_pool, units=units, filter_list=filter_list)

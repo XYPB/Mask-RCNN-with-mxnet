@@ -16,6 +16,7 @@ os.environ['MXNET_CUDNN_AUTOTUNE_DEFAULT'] = "0"
 def train_net(sym, roidb, args):
     # print config
     logger.info('called with args\n{}'.format(pprint.pformat(vars(args))))
+    print(roidb)
 
     # setup multi-gpu
     ctx = [mx.gpu(int(i)) for i in args.gpus.split(',')]
@@ -178,7 +179,7 @@ def parse_args():
     parser.add_argument('--rpn-bg-overlap', type=float, default=0.3)
     parser.add_argument('--rcnn-num-classes', type=int, default=21)
     parser.add_argument('--rcnn-feat-stride', type=int, default=16)
-    parser.add_argument('--rcnn-pooled-size', type=str, default='(14, 14)')
+    parser.add_argument('--rcnn-pooled-size', type=str, default='(7, 7)')
     parser.add_argument('--rcnn-batch-size', type=int, default=1)
     parser.add_argument('--rcnn-batch-rois', type=int, default=128)
     parser.add_argument('--rcnn-fg-fraction', type=float, default=0.25)
@@ -227,6 +228,17 @@ def get_coco(args):
     return roidb
 
 
+def get_city(args):
+    from symimdb.cityscape import Cityscape
+    args.rcnn_num_classes = len(Cityscape.classes)
+    roidb = []
+    imdb = Cityscape('train', 'data', 'data/cityscape')
+    imdb.filter_roidb()
+    imdb.append_flipped_images()
+    roidb.extend(imdb.roidb)
+    return roidb
+
+
 
 def get_resnet50_train(args):
     from model.symbol_resnet import get_resnet_train
@@ -239,7 +251,7 @@ def get_resnet50_train(args):
     args.net_fixed_params = ['conv0', 'stage1', 'gamma', 'beta']
     args.rpn_feat_stride = 16
     args.rcnn_feat_stride = 16
-    args.rcnn_pooled_size = (14, 14)
+    args.rcnn_pooled_size = (7, 7)
     return get_resnet_train(anchor_scales=args.rpn_anchor_scales, anchor_ratios=args.rpn_anchor_ratios,
                             rpn_feature_stride=args.rpn_feat_stride, rpn_pre_topk=args.rpn_pre_nms_topk,
                             rpn_post_topk=args.rpn_post_nms_topk, rpn_nms_thresh=args.rpn_nms_thresh,
@@ -262,7 +274,7 @@ def get_resnet101_train(args):
     args.net_fixed_params = ['conv0', 'stage1', 'gamma', 'beta']
     args.rpn_feat_stride = 16
     args.rcnn_feat_stride = 16
-    args.rcnn_pooled_size = (14, 14)
+    args.rcnn_pooled_size = (7, 7)
     return get_resnet_train(anchor_scales=args.rpn_anchor_scales, anchor_ratios=args.rpn_anchor_ratios,
                             rpn_feature_stride=args.rpn_feat_stride, rpn_pre_topk=args.rpn_pre_nms_topk,
                             rpn_post_topk=args.rpn_post_nms_topk, rpn_nms_thresh=args.rpn_nms_thresh,
@@ -277,7 +289,8 @@ def get_resnet101_train(args):
 def get_dataset(dataset, args):
     datasets = {
         'voc': get_voc,
-        'coco': get_coco
+        'coco': get_coco,
+        'city': get_city
     }
     if dataset not in datasets:
         raise ValueError("dataset {} not supported".format(dataset))

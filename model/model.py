@@ -55,10 +55,10 @@ def initialize_frcnn(symbol, data_shapes, arg_params, aux_params):
         arg_params['fpn_cls_score_{}_bias'.format(P)] = mx.nd.zeros(shape=arg_shape_dict['fpn_cls_score_{}_bias'.format(P)])
         arg_params['fpn_bbox_pred_{}_weight'.format(P)] = mx.random.normal(0, 0.01, shape=arg_shape_dict['fpn_bbox_pred_{}_weight'.format(P)])
         arg_params['fpn_bbox_pred_{}_bias'.format(P)] = mx.nd.zeros(shape=arg_shape_dict['fpn_bbox_pred_{}_bias'.format(P)])
-    for P in range(3, 6):
+    for P in range(2, 6):
         arg_params['P{}_lateral_weight'.format(P)] = mx.random.normal(0, 0.01, shape=arg_shape_dict['P{}_lateral_weight'.format(P)])
         arg_params['P{}_lateral_bias'.format(P)] = mx.nd.zeros(shape=arg_shape_dict['P{}_lateral_bias'.format(P)])
-    for P in range(3, 5):
+    for P in range(2, 5):
         arg_params['P{}_aggregate_weight'.format(P)] = mx.random.normal(0, 0.01, shape=arg_shape_dict['P{}_aggregate_weight'.format(P)])
         arg_params['P{}_aggregate_bias'.format(P)] = mx.nd.zeros(shape=arg_shape_dict['P{}_aggregate_bias'.format(P)])
 
@@ -66,6 +66,10 @@ def initialize_frcnn(symbol, data_shapes, arg_params, aux_params):
     arg_params['cls_score_bias'] = mx.nd.zeros(shape=arg_shape_dict['cls_score_bias'])
     arg_params['bbox_pred_weight'] = mx.random.normal(0, 0.001, shape=arg_shape_dict['bbox_pred_weight'])
     arg_params['bbox_pred_bias'] = mx.nd.zeros(shape=arg_shape_dict['bbox_pred_bias'])
+    arg_params['fc6_weight'] = mx.random.normal(0, 0.01, shape=arg_shape_dict['fc6_weight'])
+    arg_params['fc6_bias'] = mx.nd.zeros(shape=arg_shape_dict['fc6_bias'])
+    arg_params['fc7_weight'] = mx.random.normal(0, 0.001, shape=arg_shape_dict['fc7_weight'])
+    arg_params['fc7_bias'] = mx.nd.zeros(shape=arg_shape_dict['fc7_bias'])
     return arg_params, aux_params
 
 
